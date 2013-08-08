@@ -33,6 +33,7 @@ using ICSharpCode.NRefactory.Semantics;
 using System.Threading.Tasks;
 using MonoDevelop.Core;
 using System.Threading;
+using MonoDevelop.Core.Instrumentation;
 
 namespace MonoDevelop.Refactoring
 {
@@ -68,6 +69,8 @@ namespace MonoDevelop.Refactoring
 			
 		}
 
+		public static TimerCounter ResolveCounter = InstrumentationService.CreateTimerCounter("Resolve document", "Parsing");
+
 		/// <summary>
 		/// Returns a full C# syntax tree resolver which is shared between semantic highlighting, source analysis and refactoring.
 		/// For code analysis tasks this should be used instead of generating an own resolver. Only exception is if a local resolving is done using a 
@@ -98,9 +101,11 @@ namespace MonoDevelop.Refactoring
 			var token = sharedTokenSource.Token;
 			var resolveTask = Task.Factory.StartNew (delegate {
 				try {
-					var result = new CSharpAstResolver (compilation, unit, parsedFile);
-					result.ApplyNavigator (new ConstantModeResolveVisitorNavigator (ResolveVisitorNavigationMode.Resolve, null), token);
-					return result;
+					using (var timer = ResolveCounter.BeginTiming ()) {
+						var result = new CSharpAstResolver (compilation, unit, parsedFile);
+						result.ApplyNavigator (new ConstantModeResolveVisitorNavigator (ResolveVisitorNavigationMode.Resolve, null), token);
+						return result;
+					}
 				} catch (OperationCanceledException) {
 					return null;
 				} catch (Exception e) {
@@ -116,7 +121,7 @@ namespace MonoDevelop.Refactoring
 			return wrapper;
 		}
 
-		sealed class ConstantModeResolveVisitorNavigator : IResolveVisitorNavigator
+		public sealed class ConstantModeResolveVisitorNavigator : IResolveVisitorNavigator
 		{
 			readonly ResolveVisitorNavigationMode mode;
 			readonly IResolveVisitorNavigator targetForResolveCalls;
